@@ -29,8 +29,8 @@ test("sidebar exposes Chinese navigation links", () => {
     </MemoryRouter>,
   );
 
-  expect(screen.getByRole("link", { name: "视频剪辑" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "API Key 管理" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "视频剪辑" })).toHaveAttribute("href", "/clipping");
+  expect(screen.getByRole("link", { name: "API Key 管理" })).toHaveAttribute("href", "/profiles");
 });
 
 test("/clipping route renders the clipping heading", async () => {
