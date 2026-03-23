@@ -1,4 +1,6 @@
 import type {
+  Job,
+  JobInput,
   Profile,
   ProfileConnectionTestPayload,
   ProfileConnectionTestResult,
@@ -50,6 +52,13 @@ export function testProfileConnection(
   payload: ProfileConnectionTestPayload,
 ): Promise<ProfileConnectionTestResult> {
   return request<ProfileConnectionTestResult>("/profiles/test-connection", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createJob(payload: JobInput): Promise<Job> {
+  return request<Job>("/jobs", {
     method: "POST",
     body: JSON.stringify(payload),
   });

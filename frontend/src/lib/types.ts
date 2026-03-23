@@ -27,3 +27,22 @@ export type ProfileConnectionTestResult = {
   status: "ok" | "error";
   message: string;
 };
+
+export type Job = {
+  id: number;
+  video_url: string;
+  candidate_name: string;
+  profile_id: number;
+  target_duration_seconds: number;
+  status: string;
+  workspace_path: string;
+  failure_message: string | null;
+  created_at: string;
+};
+
+export type JobInput = {
+  video_url: string;
+  candidate_name: string;
+  profile_id: number;
+  target_duration_seconds: number;
+};
