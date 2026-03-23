@@ -5,7 +5,7 @@ import { VideoLinkStep } from "../features/clipping/VideoLinkStep";
 import { useClippingWizard } from "../features/clipping/useClippingWizard";
 import { ProfileForm } from "../features/profiles/ProfileForm";
 import { ProfileList } from "../features/profiles/ProfileList";
-import { createJob, listProfiles } from "../lib/api";
+import { createJob, getJob, listProfiles } from "../lib/api";
 import type { Job, Profile } from "../lib/types";
 import { AppShell } from "./AppShell";
 
@@ -28,6 +28,50 @@ function ClippingPage() {
   useEffect(() => {
     void loadProfiles();
   }, []);
+
+  useEffect(() => {
+    if (wizardState.step !== "loading" || wizardState.jobId === null) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let nextPoll: number | undefined;
+
+    async function pollJobStatus() {
+      try {
+        const job = await getJob(wizardState.jobId as number);
+        if (cancelled) {
+          return;
+        }
+        dispatch({
+          type: "jobStatusUpdated",
+          payload: {
+            jobStatus: job.status,
+          },
+        });
+        if (job.status !== "review_ready") {
+          nextPoll = window.setTimeout(() => {
+            void pollJobStatus();
+          }, 2000);
+        }
+      } catch {
+        if (!cancelled) {
+          nextPoll = window.setTimeout(() => {
+            void pollJobStatus();
+          }, 2000);
+        }
+      }
+    }
+
+    void pollJobStatus();
+
+    return () => {
+      cancelled = true;
+      if (nextPoll !== undefined) {
+        window.clearTimeout(nextPoll);
+      }
+    };
+  }, [dispatch, wizardState.jobId, wizardState.step]);
 
   async function handleCreateJob(payload: {
     profileId: number;
@@ -105,6 +149,9 @@ function ClippingPage() {
           <h2>任务已启动</h2>
           <p>当前状态：{wizardState.jobStatus || "准备中"}</p>
           <p>任务编号：{wizardState.jobId ?? "待分配"}</p>
+          <p>候选人发言优先：{wizardState.candidateSpeakerPriority ? "已开启" : "未开启"}</p>
+          <p>节省 Token 模式：{wizardState.tokenSavingMode ? "已开启" : "未开启"}</p>
+          {wizardState.notes ? <p>岗位/备注：{wizardState.notes}</p> : null}
           <p>系统正在下载视频、抽取音频并准备转写结果。</p>
           <button type="button" onClick={() => dispatch({ type: "backToAnalysisSetup" })}>
             返回修改设置
@@ -114,6 +161,9 @@ function ClippingPage() {
       {wizardState.step === "review" ? (
         <section>
           <h2>AI 推荐片段</h2>
+          <p>候选人发言优先：{wizardState.candidateSpeakerPriority ? "已开启" : "未开启"}</p>
+          <p>节省 Token 模式：{wizardState.tokenSavingMode ? "已开启" : "未开启"}</p>
+          {wizardState.notes ? <p>岗位/备注：{wizardState.notes}</p> : null}
           <p>推荐片段已准备完成。下一步将接入人工确认和导出功能。</p>
         </section>
       ) : null}

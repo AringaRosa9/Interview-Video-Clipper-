@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type { Profile } from "../../lib/types";
 
 type AnalysisSetupStepProps = {
@@ -30,6 +30,12 @@ export function AnalysisSetupStep(props: AnalysisSetupStepProps) {
   );
   const [tokenSavingMode, setTokenSavingMode] = useState(props.initialTokenSavingMode);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (profileId === 0 && props.profiles.length > 0) {
+      setProfileId(props.profiles[0].id);
+    }
+  }, [profileId, props.profiles]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

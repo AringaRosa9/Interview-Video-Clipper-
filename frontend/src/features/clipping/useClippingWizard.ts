@@ -50,6 +50,12 @@ export type ClippingWizardAction =
         message: string;
       };
     }
+  | {
+      type: "jobStatusUpdated";
+      payload: {
+        jobStatus: string;
+      };
+    }
   | { type: "backToVideoLink" }
   | { type: "backToAnalysisSetup" };
 
@@ -93,6 +99,12 @@ export function reduceClippingWizardState(
         jobStatus: action.payload.jobStatus,
         step: action.payload.jobStatus === "review_ready" ? "review" : "loading",
         submitError: "",
+      };
+    case "jobStatusUpdated":
+      return {
+        ...state,
+        jobStatus: action.payload.jobStatus,
+        step: action.payload.jobStatus === "review_ready" ? "review" : "loading",
       };
     case "jobFailed":
       return {

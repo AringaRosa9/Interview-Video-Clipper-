@@ -63,3 +63,7 @@ export function createJob(payload: JobInput): Promise<Job> {
     body: JSON.stringify(payload),
   });
 }
+
+export function getJob(jobId: number): Promise<Job> {
+  return request<Job>(`/jobs/${jobId}`);
+}
