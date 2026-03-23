@@ -14,11 +14,17 @@ def database_path() -> Path:
     return Path(database_url.removeprefix(prefix))
 
 
+def _connect() -> sqlite3.Connection:
+    connection = sqlite3.connect(database_path())
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
 def init_db() -> None:
     db_path = database_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(db_path) as connection:
+    with _connect() as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS profiles (
@@ -54,7 +60,7 @@ def init_db() -> None:
 @contextmanager
 def get_connection() -> Generator[sqlite3.Connection, None, None]:
     init_db()
-    connection = sqlite3.connect(database_path())
+    connection = _connect()
     connection.row_factory = sqlite3.Row
     try:
         yield connection

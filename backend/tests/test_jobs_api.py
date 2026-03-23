@@ -1,4 +1,7 @@
+import sqlite3
 from pathlib import Path
+
+import pytest
 
 
 def test_create_job_returns_queued_status(client, profile_id):
@@ -104,3 +107,62 @@ def test_create_job_rejects_non_positive_target_duration(client, profile_id):
     )
 
     assert response.status_code == 422
+
+
+def test_database_connection_enforces_job_profile_foreign_key(client):
+    from app.db import get_connection
+
+    with pytest.raises(sqlite3.IntegrityError):
+        with get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO jobs (
+                    video_url,
+                    candidate_name,
+                    profile_id,
+                    target_duration_seconds,
+                    status,
+                    workspace_path,
+                    failure_message
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "https://cdn.example.com/interview.mp4",
+                    "候选人A",
+                    9999,
+                    45,
+                    "queued",
+                    "/tmp/missing-profile-job",
+                    None,
+                ),
+            )
+
+
+def test_create_job_does_not_persist_when_workspace_allocation_fails(
+    client, profile_id, monkeypatch
+):
+    from app.db import get_connection
+    from app.routers import jobs as jobs_router
+
+    monkeypatch.setattr(
+        jobs_router,
+        "allocate_job_workspace",
+        lambda _: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with pytest.raises(OSError):
+        client.post(
+            "/api/jobs",
+            json={
+                "video_url": "https://cdn.example.com/interview.mp4",
+                "candidate_name": "候选人A",
+                "profile_id": profile_id,
+                "target_duration_seconds": 45,
+            },
+        )
+
+    with get_connection() as connection:
+        row = connection.execute("SELECT COUNT(*) AS count FROM jobs").fetchone()
+
+    assert row["count"] == 0

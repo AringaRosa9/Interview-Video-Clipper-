@@ -46,35 +46,39 @@ def create_job_endpoint(
             status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
         )
 
-    cursor = connection.execute(
-        """
-        INSERT INTO jobs (
-            video_url,
-            candidate_name,
-            profile_id,
-            target_duration_seconds,
-            status,
-            workspace_path,
-            failure_message
+    try:
+        cursor = connection.execute(
+            """
+            INSERT INTO jobs (
+                video_url,
+                candidate_name,
+                profile_id,
+                target_duration_seconds,
+                status,
+                workspace_path,
+                failure_message
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(payload.video_url),
+                payload.candidate_name,
+                payload.profile_id,
+                payload.target_duration_seconds,
+                QUEUED_STATUS,
+                "",
+                None,
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            str(payload.video_url),
-            payload.candidate_name,
-            payload.profile_id,
-            payload.target_duration_seconds,
-            QUEUED_STATUS,
-            "",
-            None,
-        ),
-    )
-    job_id = cursor.lastrowid
-    workspace_path = str(allocate_job_workspace(job_id))
-    connection.execute(
-        "UPDATE jobs SET workspace_path = ? WHERE id = ?",
-        (workspace_path, job_id),
-    )
+        job_id = cursor.lastrowid
+        workspace_path = str(allocate_job_workspace(job_id))
+        connection.execute(
+            "UPDATE jobs SET workspace_path = ? WHERE id = ?",
+            (workspace_path, job_id),
+        )
+    except Exception:
+        connection.rollback()
+        raise
     row = _get_job_row(connection, job_id)
     return JobRead.model_validate(_row_to_job(row))
 
