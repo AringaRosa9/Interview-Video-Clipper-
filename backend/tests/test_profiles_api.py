@@ -168,6 +168,26 @@ def test_profile_connection_test_maps_invalid_url(monkeypatch):
     assert result.message == "地址无效"
 
 
+def test_profile_connection_test_maps_probe_404_to_invalid_url(monkeypatch):
+    def fake_probe(_: ProfileConnectionTestRequest):
+        request = httpx.Request("GET", "https://example.com/v1/models")
+        response = httpx.Response(404, request=request)
+        raise httpx.HTTPStatusError("not found", request=request, response=response)
+
+    monkeypatch.setattr(profile_service, "_probe_profile_connection", fake_probe)
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="https://example.com/v1",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "地址无效"
+
+
 def test_profile_connection_test_maps_model_unavailable(monkeypatch):
     monkeypatch.setattr(
         profile_service,

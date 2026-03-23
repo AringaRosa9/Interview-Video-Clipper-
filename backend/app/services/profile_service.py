@@ -117,8 +117,6 @@ def _normalize_connection_error(error: Exception) -> str:
         status_code = error.response.status_code
         if status_code in {401, 403}:
             return "认证失败"
-        if status_code == 404:
-            return "模型不可用"
         if 400 <= status_code < 500:
             return "地址无效"
     return "地址无效"
