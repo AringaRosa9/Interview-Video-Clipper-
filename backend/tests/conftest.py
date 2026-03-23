@@ -5,10 +5,15 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
-    db_path = tmp_path / "test-app.db"
+def db_path(tmp_path: Path) -> Path:
+    return tmp_path / "test-app.db"
+
+
+@pytest.fixture
+def client(monkeypatch: pytest.MonkeyPatch, db_path: Path) -> TestClient:
     monkeypatch.setenv("APP_DATABASE_URL", f"sqlite:///{db_path}")
 
-    from app.main import app
+    from app.main import create_app
 
-    return TestClient(app)
+    with TestClient(create_app()) as test_client:
+        yield test_client
