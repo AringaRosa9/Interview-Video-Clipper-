@@ -158,6 +158,30 @@ def test_get_job_highlights_reads_structured_selector_payload(client, profile_id
     }
 
 
+def test_get_job_highlights_returns_empty_list_for_malformed_payload(client, profile_id):
+    create_response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "https://cdn.example.com/interview.mp4",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 45,
+        },
+    )
+    job = create_response.json()
+    workspace_path = Path(job["workspace_path"])
+    workspace_path.joinpath("highlights.json").write_text("{not-valid-json", encoding="utf-8")
+
+    response = client.get(f"/api/jobs/{job['id']}/highlights")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "job_id": job["id"],
+        "status": "transcribing",
+        "items": [],
+    }
+
+
 def test_get_missing_job_returns_not_found(client):
     response = client.get("/api/jobs/9999")
 

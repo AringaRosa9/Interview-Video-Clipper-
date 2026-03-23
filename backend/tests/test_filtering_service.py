@@ -53,3 +53,26 @@ def test_filter_prioritizes_longer_candidate_answers_first():
         "我主导了支付系统重构，拆分核心链路并建立监控告警，最终把成功率提升到99.9%，同时把故障恢复时间缩短到5分钟内。",
         "我负责重构支付链路。",
     ]
+
+
+def test_filter_does_not_treat_candidate_answer_with_question_markers_as_interviewer_prompt():
+    segments = [
+        {"text": "可以介绍一下你做过的高并发项目吗？", "start": 0, "end": 4, "speaker": "speaker_0"},
+        {
+            "text": "可以。我主导过支付链路改造，把成功率提升到99.9%。",
+            "start": 4.5,
+            "end": 13.2,
+            "speaker": "speaker_1",
+        },
+        {
+            "text": "后来我又补齐了监控告警和自动化恢复能力。",
+            "start": 13.4,
+            "end": 18.6,
+            "speaker": "speaker_1",
+        },
+    ]
+
+    filtered = filter_candidate_segments(segments)
+
+    assert [segment["speaker"] for segment in filtered] == ["speaker_1", "speaker_1"]
+    assert filtered[0]["text"].startswith("可以。我主导过支付链路改造")

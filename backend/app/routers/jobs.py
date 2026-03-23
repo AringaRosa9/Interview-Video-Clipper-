@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 
 from app.db import get_db
 from app.models.job import Job
@@ -65,10 +66,13 @@ def _read_workspace_highlights(workspace_path: Optional[str]) -> list[HighlightI
     highlight_path = Path(workspace_path) / "highlights.json"
     if not highlight_path.exists():
         return []
-    payload = json.loads(highlight_path.read_text(encoding="utf-8"))
-    if isinstance(payload, dict):
-        return parse_highlight_response(payload)
-    return [HighlightItemRead.model_validate(item) for item in payload]
+    try:
+        payload = json.loads(highlight_path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return parse_highlight_response(payload)
+        return [HighlightItemRead.model_validate(item) for item in payload]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, ValidationError):
+        return []
 
 
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)

@@ -3,7 +3,16 @@ from __future__ import annotations
 from collections import Counter
 
 
-QUESTION_MARKERS = ("?", "？", "请", "能否", "可以", "为什么", "吗")
+QUESTION_PREFIXES = (
+    "请",
+    "能否",
+    "可否",
+    "为什么",
+    "如何",
+    "介绍一下",
+    "讲讲",
+    "说说",
+)
 
 
 def _is_obvious_question(segment: dict) -> bool:
@@ -12,7 +21,7 @@ def _is_obvious_question(segment: dict) -> bool:
         return False
     if text.endswith(("?", "？")):
         return True
-    return any(marker in text for marker in QUESTION_MARKERS)
+    return any(text.startswith(prefix) for prefix in QUESTION_PREFIXES)
 
 
 def filter_candidate_segments(segments: list[dict]) -> list[dict]:
