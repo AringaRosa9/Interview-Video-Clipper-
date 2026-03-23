@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { AppShell } from "./AppShell";
 import { AppRoutes } from "./routes";
 
 function LocationDisplay() {
@@ -20,6 +21,17 @@ function renderAt(initialPath: string) {
     </MemoryRouter>,
   );
 }
+
+test("sidebar exposes Chinese navigation links", () => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AppShell />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByRole("link", { name: "视频剪辑" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "API Key 管理" })).toBeInTheDocument();
+});
 
 test("/clipping route renders the clipping heading", async () => {
   renderAt("/clipping");
