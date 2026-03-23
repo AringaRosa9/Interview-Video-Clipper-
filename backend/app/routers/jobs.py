@@ -1,5 +1,6 @@
 import sqlite3
 import shutil
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -7,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db import get_db
 from app.models.job import Job
-from app.schemas.job import JobCreate, JobHighlightsRead, JobRead
+from app.schemas.job import HighlightItemRead, JobCreate, JobHighlightsRead, JobRead
 from app.services import media_service, transcription_service
 from app.services.workspace_service import allocate_job_workspace
 
@@ -55,6 +56,16 @@ def _cleanup_workspace(workspace_path: Optional[str]) -> None:
     if not workspace_path:
         return
     shutil.rmtree(workspace_path, ignore_errors=True)
+
+
+def _read_workspace_highlights(workspace_path: Optional[str]) -> list[HighlightItemRead]:
+    if not workspace_path:
+        return []
+    highlight_path = Path(workspace_path) / "highlights.json"
+    if not highlight_path.exists():
+        return []
+    payload = json.loads(highlight_path.read_text(encoding="utf-8"))
+    return [HighlightItemRead.model_validate(item) for item in payload]
 
 
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
@@ -134,4 +145,8 @@ def get_job_highlights_endpoint(
     row = _get_job_row(connection, job_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    return JobHighlightsRead(job_id=job_id, status=row["status"], items=[])
+    return JobHighlightsRead(
+        job_id=job_id,
+        status=row["status"],
+        items=_read_workspace_highlights(row["workspace_path"]),
+    )

@@ -24,7 +24,16 @@ class JobRead(BaseModel):
     created_at: str
 
 
+class HighlightItemRead(BaseModel):
+    start: float
+    end: float
+    star_label: str
+    summary: str
+    reason: str
+    score: float
+
+
 class JobHighlightsRead(BaseModel):
     job_id: int
     status: str
-    items: list[dict]
+    items: list[HighlightItemRead]
