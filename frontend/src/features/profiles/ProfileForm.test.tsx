@@ -1,8 +1,9 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { ProfileForm } from "./ProfileForm";
 import type { Profile } from "../../lib/types";
+import { testProfileConnection } from "../../lib/api";
 
 vi.mock("../../lib/api", () => ({
   createProfile: vi.fn(),
@@ -67,4 +68,33 @@ test("can return from edit mode to create mode without reload", () => {
 
   expect(screen.getByRole("heading", { name: "新建配置" })).toBeInTheDocument();
   expect(screen.queryByDisplayValue("默认配置")).not.toBeInTheDocument();
+});
+
+test("clears stale errors and status when returning from edit mode to create mode", async () => {
+  vi.mocked(testProfileConnection).mockResolvedValueOnce({
+    status: "ok",
+    message: "连接成功",
+  });
+
+  render(<ProfileFormHarness />);
+
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  expect(screen.getByText("请输入配置名称")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "选择已有配置" }));
+
+  fireEvent.change(screen.getByLabelText("接口密钥"), {
+    target: { value: "sk-test" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
+
+  expect(await screen.findByText("连接成功")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "取消编辑" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "新建配置" })).toBeInTheDocument();
+  });
+  expect(screen.queryByText("请输入配置名称")).not.toBeInTheDocument();
+  expect(screen.queryByText("连接成功")).not.toBeInTheDocument();
 });

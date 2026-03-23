@@ -1,5 +1,6 @@
 from app.services import profile_service
 from app.schemas.profile import ProfileConnectionTestRequest
+from app.schemas.profile import ProfileConnectionTestResult
 import httpx
 
 
@@ -112,7 +113,7 @@ def test_profile_connection_test_returns_provider_status(client, monkeypatch):
     monkeypatch.setattr(
         profile_service,
         "test_profile_connection",
-        lambda payload: {"status": "ok", "message": "连接成功"},
+        lambda payload: ProfileConnectionTestResult(status="ok", message="连接成功"),
     )
 
     response = client.post(

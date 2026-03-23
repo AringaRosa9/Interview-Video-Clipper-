@@ -24,6 +24,9 @@ export function ProfileForm({ profile, onSaved, onCancelEdit }: ProfileFormProps
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    setErrors({});
+    setStatus("");
+
     if (!profile) {
       setForm(emptyForm);
       return;
