@@ -8,25 +8,48 @@ type ProfileListProps = {
 
 export function ProfileList({ profiles, selectedProfileId, onSelect }: ProfileListProps) {
   if (profiles.length === 0) {
-    return <p>还没有保存的配置。</p>;
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">🔑</div>
+        <div className="empty-state-title">还没有保存的配置</div>
+        <div className="empty-state-desc">在左侧新建一个 API Key 配置</div>
+      </div>
+    );
   }
 
   return (
     <section aria-label="已保存配置">
-      <h2>已保存配置</h2>
-      <ul>
-        {profiles.map((profile) => (
-          <li key={profile.id}>
-            <button type="button" onClick={() => onSelect(profile)}>
-              {profile.name}
+      <div className="section-header">
+        <div className="section-title">已保存配置</div>
+        <span className="status-tag status-tag-cyan">{profiles.length} 个</span>
+      </div>
+      <div className="profile-grid">
+        {profiles.map((profile) => {
+          const isEditing = selectedProfileId === profile.id;
+          return (
+            <button
+              key={profile.id}
+              type="button"
+              className={`profile-card${isEditing ? " active-edit" : ""}`}
+              onClick={() => onSelect(profile)}
+              style={{ textAlign: "left", width: "100%", cursor: "pointer", background: "transparent", border: undefined }}
+            >
+              <div className="profile-card-icon">🤖</div>
+              <div className="profile-card-info">
+                <div className="profile-card-name">
+                  {profile.name}
+                  {profile.is_default && <span className="badge badge-default">默认</span>}
+                  {isEditing && <span className="badge badge-editing">编辑中</span>}
+                </div>
+                <div className="profile-card-meta">
+                  {profile.model} · {profile.base_url}
+                </div>
+              </div>
+              <span style={{ color: "var(--text-muted)", fontSize: "16px" }}>›</span>
             </button>
-            {selectedProfileId === profile.id ? <span> 当前编辑</span> : null}
-            {profile.is_default ? <span> 默认</span> : null}
-            <div>{profile.base_url}</div>
-            <div>{profile.model}</div>
-          </li>
-        ))}
-      </ul>
+          );
+        })}
+      </div>
     </section>
   );
 }

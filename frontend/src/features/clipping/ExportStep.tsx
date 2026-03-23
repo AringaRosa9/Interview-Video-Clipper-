@@ -5,13 +5,21 @@ type ExportStepProps = {
 
 export function ExportStep(props: ExportStepProps) {
   return (
-    <section>
-      <h2>导出结果</h2>
-      <p>成片已经导出完成，可以直接下载本地文件。</p>
-      <p>输出文件：{props.outputFile}</p>
-      <a href={`/api/jobs/${props.jobId}/download`} download>
-        下载成片
+    <div className="export-success">
+      <div className="export-success-icon">🎉</div>
+      <div className="export-success-title">成片已导出完成！</div>
+      <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+        精彩视频片段已成功剪辑导出，可直接下载到本地。
+      </p>
+      <div className="export-success-file">{props.outputFile}</div>
+      <a
+        href={`/api/jobs/${props.jobId}/download`}
+        download
+        className="btn btn-primary"
+        style={{ marginTop: "8px" }}
+      >
+        ⬇️ 下载成片
       </a>
-    </section>
+    </div>
   );
 }

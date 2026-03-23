@@ -21,15 +21,27 @@ export function ProfileTestButton({
       const result = await testProfileConnection(payload);
       onResult?.(result);
     } catch {
-      onResult?.({ status: "error", message: "连接失败" });
+      onResult?.({ status: "error", message: "连接失败，请检查配置" });
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <button type="button" onClick={handleClick} disabled={disabled || isSubmitting}>
-      {isSubmitting ? "测试中..." : "测试连接"}
+    <button
+      type="button"
+      className="btn btn-secondary"
+      onClick={handleClick}
+      disabled={disabled || isSubmitting}
+    >
+      {isSubmitting ? (
+        <>
+          <span className="spinner" />
+          测试中...
+        </>
+      ) : (
+        <>🔌 测试连接</>
+      )}
     </button>
   );
 }
