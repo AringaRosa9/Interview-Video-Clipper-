@@ -1,3 +1,4 @@
+import base64
 import sqlite3
 import shutil
 import json
@@ -5,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from app.db import get_db
@@ -18,7 +20,8 @@ from app.schemas.job import (
     JobReviewRead,
     JobReviewRequest,
 )
-from app.services import export_service, media_service, transcription_service
+from app.services import export_service, filtering_service, media_service, transcription_service
+from app.services import highlight_selector
 from app.services.highlight_selector import parse_highlight_response
 from app.services.workspace_service import allocate_job_workspace
 
@@ -27,6 +30,8 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 QUEUED_STATUS = "queued"
 DOWNLOADING_STATUS = "downloading"
 TRANSCRIBING_STATUS = "transcribing"
+REVIEW_READY_STATUS = "review_ready"
+REVIEWABLE_JOB_STATUSES = {REVIEW_READY_STATUS, "reviewed", "exported"}
 
 
 def _row_to_job(row: sqlite3.Row) -> Job:
@@ -68,10 +73,14 @@ def _cleanup_workspace(workspace_path: Optional[str]) -> None:
     shutil.rmtree(workspace_path, ignore_errors=True)
 
 
+def _highlights_path(workspace_path: str) -> Path:
+    return Path(workspace_path) / "highlights.json"
+
+
 def _read_workspace_highlights(workspace_path: Optional[str]) -> list[HighlightItemRead]:
     if not workspace_path:
         return []
-    highlight_path = Path(workspace_path) / "highlights.json"
+    highlight_path = _highlights_path(workspace_path)
     if not highlight_path.exists():
         return []
     try:
@@ -81,6 +90,18 @@ def _read_workspace_highlights(workspace_path: Optional[str]) -> list[HighlightI
         return [HighlightItemRead.model_validate(item) for item in payload]
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, ValidationError):
         return []
+
+
+def _write_workspace_highlights(
+    workspace_path: str, highlights: list[HighlightItemRead]
+) -> None:
+    _highlights_path(workspace_path).write_text(
+        json.dumps(
+            {"highlights": [highlight.model_dump() for highlight in highlights]},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _approved_highlight_ids_path(workspace_path: str) -> Path:
@@ -109,6 +130,97 @@ def _write_workspace_approved_highlight_ids(
         json.dumps(approved_highlight_ids, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def _output_file_path(workspace_path: str) -> Path:
+    return Path(workspace_path) / "output_file.txt"
+
+
+def _write_workspace_output_file(workspace_path: str, output_file: str) -> None:
+    _output_file_path(workspace_path).write_text(output_file, encoding="utf-8")
+
+
+def _read_workspace_output_file(workspace_path: Optional[str]) -> Optional[str]:
+    if not workspace_path:
+        return None
+    output_path = _output_file_path(workspace_path)
+    if output_path.exists():
+        return output_path.read_text(encoding="utf-8").strip() or None
+    fallback = Path(workspace_path) / "final.mp4"
+    return str(fallback) if fallback.exists() else None
+
+
+def _decode_api_key(api_key_obscured: str) -> str:
+    return base64.urlsafe_b64decode(api_key_obscured.encode("ascii")).decode("utf-8")
+
+
+def _build_fallback_highlights(
+    segments: list[dict], target_duration_seconds: int
+) -> list[HighlightItemRead]:
+    remaining_duration = max(target_duration_seconds, 0)
+    highlights: list[HighlightItemRead] = []
+
+    for segment in segments:
+        text = str(segment.get("text", "")).strip()
+        if not text:
+            continue
+        start = float(segment.get("start", 0))
+        end = float(segment.get("end", start))
+        duration = max(end - start, 0.0)
+        if duration <= 0:
+            continue
+        highlights.append(
+            HighlightItemRead(
+                start=start,
+                end=end,
+                star_label="Candidate Highlight",
+                summary=text[:60],
+                reason="基于候选人回答内容的本地回退高亮。",
+                score=0.5,
+            )
+        )
+        remaining_duration -= duration
+        if remaining_duration <= 0:
+            break
+
+    return highlights
+
+
+def _generate_highlights(
+    connection: sqlite3.Connection,
+    profile_id: int,
+    target_duration_seconds: int,
+    transcript_segments: list[dict],
+) -> list[HighlightItemRead]:
+    if not transcript_segments:
+        return []
+
+    filtered_segments = filtering_service.filter_candidate_segments(transcript_segments)
+    if not filtered_segments:
+        return []
+
+    try:
+        transcript_chunks = filtering_service.chunk_transcript_segments(filtered_segments)
+        profile_row = connection.execute(
+            "SELECT base_url, api_key_obscured, model FROM profiles WHERE id = ?",
+            (profile_id,),
+        ).fetchone()
+        if profile_row is None or not transcript_chunks:
+            return _build_fallback_highlights(filtered_segments, target_duration_seconds)
+
+        selection_request = highlight_selector.HighlightSelectionRequest(
+            base_url=profile_row["base_url"],
+            api_key=_decode_api_key(profile_row["api_key_obscured"]),
+            model=profile_row["model"],
+            transcript_chunks=transcript_chunks,
+            target_duration_seconds=target_duration_seconds,
+        )
+        highlights = highlight_selector.select_highlights(selection_request)
+        return highlights or _build_fallback_highlights(
+            filtered_segments, target_duration_seconds
+        )
+    except Exception:
+        return _build_fallback_highlights(filtered_segments, target_duration_seconds)
 
 
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
@@ -162,7 +274,15 @@ def create_job_endpoint(
         audio_path = media_service.extract_audio(video_path, workspace_path)
         _persist_workspace_value(workspace_path, "audio_path.txt", audio_path)
         _update_job_status(connection, job_id, TRANSCRIBING_STATUS)
-        transcription_service.transcribe_audio(audio_path, workspace_path)
+        transcript_segments = transcription_service.transcribe_audio(audio_path, workspace_path)
+        highlights = _generate_highlights(
+            connection,
+            payload.profile_id,
+            payload.target_duration_seconds,
+            transcript_segments,
+        )
+        _write_workspace_highlights(workspace_path, highlights)
+        _update_job_status(connection, job_id, REVIEW_READY_STATUS)
     except Exception:
         connection.rollback()
         _cleanup_workspace(workspace_path)
@@ -241,7 +361,8 @@ def export_job_endpoint(
         workspace_path=workspace_path,
         clips=approved_clips,
     )
-    output_file = exported_files[-1] if exported_files else str(Path(workspace_path) / "final.mp4")
+    output_file = exported_files[-1]
+    _write_workspace_output_file(workspace_path, output_file)
 
     connection.execute(
         "UPDATE jobs SET status = ?, failure_message = NULL WHERE id = ?",
@@ -249,3 +370,26 @@ def export_job_endpoint(
     )
 
     return JobExportRead(job_id=job_id, status="exported", output_file=output_file)
+
+
+@router.get("/{job_id}/download")
+def download_job_export_endpoint(
+    job_id: int, connection: sqlite3.Connection = Depends(get_db)
+) -> FileResponse:
+    row = _get_job_row(connection, job_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    output_file = _read_workspace_output_file(row["workspace_path"])
+    if not output_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Export file not found"
+        )
+
+    output_path = Path(output_file)
+    if not output_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Export file not found"
+        )
+
+    return FileResponse(output_path, filename=output_path.name)

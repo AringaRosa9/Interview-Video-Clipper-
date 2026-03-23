@@ -11,6 +11,8 @@ import { createJob, exportJob, getJob, getJobHighlights, listProfiles, reviewJob
 import type { HighlightItem, Job, JobExportResult, Profile } from "../lib/types";
 import { AppShell } from "./AppShell";
 
+const REVIEWABLE_JOB_STATUSES = new Set(["review_ready", "reviewed", "exported"]);
+
 function ClippingPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profilesError, setProfilesError] = useState("");
@@ -56,7 +58,7 @@ function ClippingPage() {
             jobStatus: job.status,
           },
         });
-        if (job.status !== "review_ready") {
+        if (!REVIEWABLE_JOB_STATUSES.has(job.status)) {
           nextPoll = window.setTimeout(() => {
             void pollJobStatus();
           }, 2000);
@@ -224,7 +226,7 @@ function ClippingPage() {
           <p>节省 Token 模式：{wizardState.tokenSavingMode ? "已开启" : "未开启"}</p>
           {wizardState.notes ? <p>岗位/备注：{wizardState.notes}</p> : null}
           {exportResult ? (
-            <ExportStep outputFile={exportResult.output_file} />
+            <ExportStep jobId={exportResult.job_id} outputFile={exportResult.output_file} />
           ) : (
             <AIReviewStep
               items={highlights}

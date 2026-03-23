@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 
-def test_create_job_returns_transcribing_status(client, profile_id):
+def test_create_job_returns_review_ready_status(client, profile_id):
     payload = {
         "video_url": "https://cdn.example.com/interview.mp4",
         "candidate_name": "候选人A",
@@ -15,7 +15,7 @@ def test_create_job_returns_transcribing_status(client, profile_id):
     response = client.post("/api/jobs", json=payload)
 
     assert response.status_code == 201
-    assert response.json()["status"] == "transcribing"
+    assert response.json()["status"] == "review_ready"
 
 
 def test_create_job_creates_workspace_directory(client, profile_id, db_path):
@@ -61,10 +61,11 @@ def test_start_job_moves_to_transcribing(client, profile_id, monkeypatch):
     )
 
     assert response.status_code == 201
-    assert response.json()["status"] == "transcribing"
+    assert response.json()["status"] == "review_ready"
     workspace_path = Path(response.json()["workspace_path"])
     assert (workspace_path / "video_path.txt").read_text() == "video.mp4"
     assert (workspace_path / "audio_path.txt").read_text() == "audio.wav"
+    assert (workspace_path / "highlights.json").exists()
 
 
 def test_get_job_returns_persisted_status(client, profile_id):
@@ -83,7 +84,7 @@ def test_get_job_returns_persisted_status(client, profile_id):
 
     assert response.status_code == 200
     assert response.json()["id"] == job_id
-    assert response.json()["status"] == "transcribing"
+    assert response.json()["status"] == "review_ready"
     assert response.json()["failure_message"] is None
 
 
@@ -104,7 +105,7 @@ def test_get_job_highlights_returns_empty_list(client, profile_id):
     assert response.status_code == 200
     assert response.json() == {
         "job_id": job_id,
-        "status": "transcribing",
+        "status": "review_ready",
         "items": [],
     }
 
@@ -144,7 +145,7 @@ def test_get_job_highlights_reads_structured_selector_payload(client, profile_id
     assert response.status_code == 200
     assert response.json() == {
         "job_id": job["id"],
-        "status": "transcribing",
+        "status": "review_ready",
         "items": [
             {
                 "start": 5.25,
@@ -177,7 +178,7 @@ def test_get_job_highlights_returns_empty_list_for_malformed_payload(client, pro
     assert response.status_code == 200
     assert response.json() == {
         "job_id": job["id"],
-        "status": "transcribing",
+        "status": "review_ready",
         "items": [],
     }
 
@@ -242,7 +243,7 @@ def test_review_persists_approved_highlight_ids_and_export_uses_them(
     def fake_export_clips(*, workspace_path: str, clips: list[dict]) -> list[str]:
         export_calls.append({"workspace_path": workspace_path, "clips": clips})
         output_path = Path(workspace_path) / "final.mp4"
-        output_path.write_text("final video", encoding="utf-8")
+        output_path.write_bytes(b"final video")
         return [str(output_path)]
 
     monkeypatch.setattr("app.services.export_service.export_job_workspace", fake_export_clips)
@@ -270,6 +271,11 @@ def test_review_persists_approved_highlight_ids_and_export_uses_them(
             ],
         }
     ]
+
+    download_response = client.get(f"/api/jobs/{job['id']}/download")
+
+    assert download_response.status_code == 200
+    assert download_response.content == b"final video"
 
 
 def test_get_missing_job_returns_not_found(client):

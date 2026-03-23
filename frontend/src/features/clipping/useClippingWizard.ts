@@ -1,6 +1,7 @@
 import { useReducer } from "react";
 
 export type ClippingWizardStep = "video-link" | "analysis-setup" | "loading" | "review";
+const REVIEWABLE_JOB_STATUSES = new Set(["review_ready", "reviewed", "exported"]);
 
 export type ClippingWizardState = {
   step: ClippingWizardStep;
@@ -97,14 +98,14 @@ export function reduceClippingWizardState(
         ...state,
         jobId: action.payload.jobId,
         jobStatus: action.payload.jobStatus,
-        step: action.payload.jobStatus === "review_ready" ? "review" : "loading",
+        step: REVIEWABLE_JOB_STATUSES.has(action.payload.jobStatus) ? "review" : "loading",
         submitError: "",
       };
     case "jobStatusUpdated":
       return {
         ...state,
         jobStatus: action.payload.jobStatus,
-        step: action.payload.jobStatus === "review_ready" ? "review" : "loading",
+        step: REVIEWABLE_JOB_STATUSES.has(action.payload.jobStatus) ? "review" : "loading",
       };
     case "jobFailed":
       return {
