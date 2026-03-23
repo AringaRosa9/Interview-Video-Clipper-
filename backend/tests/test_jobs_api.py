@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 
-def test_create_job_returns_queued_status(client, profile_id):
+def test_create_job_returns_transcribing_status(client, profile_id):
     payload = {
         "video_url": "https://cdn.example.com/interview.mp4",
         "candidate_name": "候选人A",
@@ -15,7 +15,7 @@ def test_create_job_returns_queued_status(client, profile_id):
     response = client.post("/api/jobs", json=payload)
 
     assert response.status_code == 201
-    assert response.json()["status"] == "queued"
+    assert response.json()["status"] == "transcribing"
 
 
 def test_create_job_creates_workspace_directory(client, profile_id, db_path):
@@ -36,6 +36,37 @@ def test_create_job_creates_workspace_directory(client, profile_id, db_path):
     assert workspace_path.parent == db_path.parent / "data" / "jobs"
 
 
+def test_start_job_moves_to_transcribing(client, profile_id, monkeypatch):
+    monkeypatch.setattr(
+        "app.services.media_service.download_video",
+        lambda *args, **kwargs: "video.mp4",
+    )
+    monkeypatch.setattr(
+        "app.services.media_service.extract_audio",
+        lambda *args, **kwargs: "audio.wav",
+    )
+    monkeypatch.setattr(
+        "app.services.transcription_service.transcribe_audio",
+        lambda *args, **kwargs: [],
+    )
+
+    response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "https://cdn.example.com/interview.mp4",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 45,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "transcribing"
+    workspace_path = Path(response.json()["workspace_path"])
+    assert (workspace_path / "video_path.txt").read_text() == "video.mp4"
+    assert (workspace_path / "audio_path.txt").read_text() == "audio.wav"
+
+
 def test_get_job_returns_persisted_status(client, profile_id):
     create_response = client.post(
         "/api/jobs",
@@ -52,7 +83,7 @@ def test_get_job_returns_persisted_status(client, profile_id):
 
     assert response.status_code == 200
     assert response.json()["id"] == job_id
-    assert response.json()["status"] == "queued"
+    assert response.json()["status"] == "transcribing"
     assert response.json()["failure_message"] is None
 
 
@@ -71,7 +102,11 @@ def test_get_job_highlights_returns_empty_list(client, profile_id):
     response = client.get(f"/api/jobs/{job_id}/highlights")
 
     assert response.status_code == 200
-    assert response.json() == {"job_id": job_id, "status": "queued", "items": []}
+    assert response.json() == {
+        "job_id": job_id,
+        "status": "transcribing",
+        "items": [],
+    }
 
 
 def test_get_missing_job_returns_not_found(client):

@@ -1,4 +1,5 @@
 import sqlite3
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,11 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.db import get_db
 from app.models.job import Job
 from app.schemas.job import JobCreate, JobHighlightsRead, JobRead
+from app.services import media_service, transcription_service
 from app.services.workspace_service import allocate_job_workspace
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 QUEUED_STATUS = "queued"
+DOWNLOADING_STATUS = "downloading"
+TRANSCRIBING_STATUS = "transcribing"
 
 
 def _row_to_job(row: sqlite3.Row) -> Job:
@@ -31,6 +35,19 @@ def _get_job_row(
     connection: sqlite3.Connection, job_id: int
 ) -> Optional[sqlite3.Row]:
     return connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+
+
+def _update_job_status(
+    connection: sqlite3.Connection, job_id: int, status_value: str
+) -> None:
+    connection.execute(
+        "UPDATE jobs SET status = ?, failure_message = NULL WHERE id = ?",
+        (status_value, job_id),
+    )
+
+
+def _persist_workspace_value(workspace_path: str, file_name: str, value: str) -> None:
+    Path(workspace_path, file_name).write_text(value, encoding="utf-8")
 
 
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
@@ -76,6 +93,13 @@ def create_job_endpoint(
             "UPDATE jobs SET workspace_path = ? WHERE id = ?",
             (workspace_path, job_id),
         )
+        _update_job_status(connection, job_id, DOWNLOADING_STATUS)
+        video_path = media_service.download_video(str(payload.video_url), workspace_path)
+        _persist_workspace_value(workspace_path, "video_path.txt", video_path)
+        audio_path = media_service.extract_audio(video_path, workspace_path)
+        _persist_workspace_value(workspace_path, "audio_path.txt", audio_path)
+        _update_job_status(connection, job_id, TRANSCRIBING_STATUS)
+        transcription_service.transcribe_audio(audio_path, workspace_path)
     except Exception:
         connection.rollback()
         raise
