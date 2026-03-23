@@ -124,24 +124,29 @@ def _normalize_connection_error(error: Exception) -> str:
     return "地址无效"
 
 
+def _probe_profile_connection(payload: ProfileConnectionTestRequest) -> dict:
+    url = _build_models_url(payload.base_url)
+    with httpx.Client(timeout=5.0) as client:
+        response = client.get(
+            url,
+            headers={"Authorization": f"Bearer {payload.api_key}"},
+        )
+        response.raise_for_status()
+        data = response.json()
+    return data if isinstance(data, dict) else {}
+
+
 def test_profile_connection(
     payload: ProfileConnectionTestRequest,
 ) -> ProfileConnectionTestResult:
-    url = _build_models_url(payload.base_url)
     try:
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(
-                url,
-                headers={"Authorization": f"Bearer {payload.api_key}"},
-            )
-            response.raise_for_status()
-            data = response.json()
+        data = _probe_profile_connection(payload)
     except Exception as error:
         return ProfileConnectionTestResult(
             status="error", message=_normalize_connection_error(error)
         )
 
-    models = data.get("data", []) if isinstance(data, dict) else []
+    models = data.get("data", [])
     model_ids = {
         item.get("id")
         for item in models

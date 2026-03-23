@@ -1,4 +1,6 @@
 from app.services import profile_service
+from app.schemas.profile import ProfileConnectionTestRequest
+import httpx
 
 
 def test_create_profile(client):
@@ -125,3 +127,80 @@ def test_profile_connection_test_returns_provider_status(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] in {"ok", "error"}
     assert response.json()["message"] == "连接成功"
+
+
+def test_profile_connection_test_maps_authentication_failure(monkeypatch):
+    def fake_probe(_: ProfileConnectionTestRequest):
+        request = httpx.Request("GET", "https://example.com/v1/models")
+        response = httpx.Response(401, request=request)
+        raise httpx.HTTPStatusError("unauthorized", request=request, response=response)
+
+    monkeypatch.setattr(profile_service, "_probe_profile_connection", fake_probe)
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="https://example.com/v1",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "认证失败"
+
+
+def test_profile_connection_test_maps_invalid_url(monkeypatch):
+    monkeypatch.setattr(
+        profile_service,
+        "_probe_profile_connection",
+        lambda _: (_ for _ in ()).throw(httpx.InvalidURL("bad url")),
+    )
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="bad-url",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "地址无效"
+
+
+def test_profile_connection_test_maps_model_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        profile_service,
+        "_probe_profile_connection",
+        lambda _: {"data": [{"id": "other-model"}]},
+    )
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="https://example.com/v1",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "模型不可用"
+
+
+def test_profile_connection_test_maps_timeout(monkeypatch):
+    monkeypatch.setattr(
+        profile_service,
+        "_probe_profile_connection",
+        lambda _: (_ for _ in ()).throw(httpx.ReadTimeout("timed out")),
+    )
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="https://example.com/v1",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "连接超时"

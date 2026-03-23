@@ -45,8 +45,8 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
     const nextErrors: Partial<Record<keyof ProfileInput, string>> = {};
 
     if (!form.name.trim()) nextErrors.name = "请输入配置名称";
-    if (!form.base_url.trim()) nextErrors.base_url = "请输入 Base URL";
-    if (!profile && !form.api_key.trim()) nextErrors.api_key = "请输入 API Key";
+    if (!form.base_url.trim()) nextErrors.base_url = "请输入接口地址";
+    if (!profile && !form.api_key.trim()) nextErrors.api_key = "请输入接口密钥";
     if (!form.model.trim()) nextErrors.model = "请输入模型名称";
 
     setErrors(nextErrors);
@@ -103,9 +103,10 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
       </div>
 
       <div>
-        <label htmlFor="profile-base-url">Base URL</label>
+        <label htmlFor="profile-base-url">接口地址</label>
         <input
           id="profile-base-url"
+          placeholder="例如：https://api.openai.com/v1"
           value={form.base_url}
           onChange={(event) => updateField("base_url", event.target.value)}
         />
@@ -113,9 +114,10 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
       </div>
 
       <div>
-        <label htmlFor="profile-api-key">API Key</label>
+        <label htmlFor="profile-api-key">接口密钥</label>
         <input
           id="profile-api-key"
+          placeholder="请输入接口密钥"
           type="password"
           value={form.api_key}
           onChange={(event) => updateField("api_key", event.target.value)}
@@ -127,6 +129,7 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
         <label htmlFor="profile-model">模型名称</label>
         <input
           id="profile-model"
+          placeholder="例如：gpt-4.1-mini"
           value={form.model}
           onChange={(event) => updateField("model", event.target.value)}
         />
