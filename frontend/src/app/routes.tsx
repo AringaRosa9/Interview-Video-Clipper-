@@ -38,7 +38,16 @@ function ProfilesPage() {
       <h1>API Key 管理</h1>
       <p>管理 OpenAI 兼容服务配置，支持中文表单、默认配置标记和连接测试。</p>
       {error ? <p>{error}</p> : null}
-      <ProfileForm onSaved={loadProfiles} profile={selectedProfile} />
+      {selectedProfile ? (
+        <button type="button" onClick={() => setSelectedProfile(undefined)}>
+          新建配置
+        </button>
+      ) : null}
+      <ProfileForm
+        onSaved={loadProfiles}
+        profile={selectedProfile}
+        onCancelEdit={() => setSelectedProfile(undefined)}
+      />
       <ProfileList
         profiles={profiles}
         selectedProfileId={selectedProfile?.id}

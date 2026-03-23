@@ -1,6 +1,14 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { ProfileForm } from "./ProfileForm";
+import type { Profile } from "../../lib/types";
+
+vi.mock("../../lib/api", () => ({
+  createProfile: vi.fn(),
+  updateProfile: vi.fn(),
+  testProfileConnection: vi.fn(),
+}));
 
 test("renders Chinese labels for profile management", () => {
   render(<ProfileForm onSaved={vi.fn()} />);
@@ -13,4 +21,50 @@ test("renders Chinese labels for profile management", () => {
   expect(screen.getByPlaceholderText("请输入接口密钥")).toBeInTheDocument();
   expect(screen.getByPlaceholderText("例如：gpt-4.1-mini")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "测试连接" })).toBeInTheDocument();
+});
+
+function ProfileFormHarness() {
+  const [selectedProfile, setSelectedProfile] = useState<Profile | undefined>(undefined);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          setSelectedProfile({
+            id: 1,
+            name: "默认配置",
+            base_url: "https://example.com/v1",
+            model: "demo-model",
+            is_default: true,
+            created_at: "2026-03-23T00:00:00",
+          })
+        }
+      >
+        选择已有配置
+      </button>
+      <ProfileForm
+        onSaved={vi.fn()}
+        profile={selectedProfile}
+        onCancelEdit={() => setSelectedProfile(undefined)}
+      />
+    </div>
+  );
+}
+
+test("can return from edit mode to create mode without reload", () => {
+  render(<ProfileFormHarness />);
+
+  expect(screen.getByRole("heading", { name: "新建配置" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "选择已有配置" }));
+
+  expect(screen.getByRole("heading", { name: "编辑配置" })).toBeInTheDocument();
+  expect(screen.getByDisplayValue("默认配置")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "取消编辑" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "取消编辑" }));
+
+  expect(screen.getByRole("heading", { name: "新建配置" })).toBeInTheDocument();
+  expect(screen.queryByDisplayValue("默认配置")).not.toBeInTheDocument();
 });

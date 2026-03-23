@@ -224,3 +224,42 @@ def test_profile_connection_test_maps_timeout(monkeypatch):
 
     assert result.status == "error"
     assert result.message == "连接超时"
+
+
+def test_profile_connection_test_maps_provider_5xx_to_timeout(monkeypatch):
+    def fake_probe(_: ProfileConnectionTestRequest):
+        request = httpx.Request("GET", "https://example.com/v1/models")
+        response = httpx.Response(502, request=request)
+        raise httpx.HTTPStatusError("bad gateway", request=request, response=response)
+
+    monkeypatch.setattr(profile_service, "_probe_profile_connection", fake_probe)
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="https://example.com/v1",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "连接超时"
+
+
+def test_profile_connection_test_maps_transport_failures_to_timeout(monkeypatch):
+    def fake_probe(_: ProfileConnectionTestRequest):
+        request = httpx.Request("GET", "https://example.com/v1/models")
+        raise httpx.ConnectError("connection failed", request=request)
+
+    monkeypatch.setattr(profile_service, "_probe_profile_connection", fake_probe)
+
+    result = profile_service.test_profile_connection(
+        ProfileConnectionTestRequest(
+            base_url="https://example.com/v1",
+            api_key="sk-test",
+            model="demo-model",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "连接超时"

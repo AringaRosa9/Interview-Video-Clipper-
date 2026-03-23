@@ -113,10 +113,14 @@ def _normalize_connection_error(error: Exception) -> str:
         return "连接超时"
     if isinstance(error, httpx.InvalidURL):
         return "地址无效"
+    if isinstance(error, httpx.RequestError):
+        return "连接超时"
     if isinstance(error, httpx.HTTPStatusError):
         status_code = error.response.status_code
         if status_code in {401, 403}:
             return "认证失败"
+        if 500 <= status_code < 600:
+            return "连接超时"
         if 400 <= status_code < 500:
             return "地址无效"
     return "地址无效"

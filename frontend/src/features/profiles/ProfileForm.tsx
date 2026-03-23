@@ -6,6 +6,7 @@ import { ProfileTestButton } from "./ProfileTestButton";
 type ProfileFormProps = {
   profile?: Profile;
   onSaved: () => void;
+  onCancelEdit?: () => void;
 };
 
 const emptyForm: ProfileInput = {
@@ -16,7 +17,7 @@ const emptyForm: ProfileInput = {
   is_default: false,
 };
 
-export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
+export function ProfileForm({ profile, onSaved, onCancelEdit }: ProfileFormProps) {
   const [form, setForm] = useState<ProfileInput>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof ProfileInput, string>>>({});
   const [status, setStatus] = useState<string>("");
@@ -150,6 +151,11 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
         <button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "保存中..." : "保存配置"}
         </button>
+        {profile ? (
+          <button type="button" onClick={onCancelEdit}>
+            取消编辑
+          </button>
+        ) : null}
         <ProfileTestButton
           payload={{
             base_url: form.base_url,
