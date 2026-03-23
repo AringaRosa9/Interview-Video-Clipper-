@@ -1,3 +1,6 @@
+from app.services import profile_service
+
+
 def test_create_profile(client):
     payload = {
         "name": "默认模型",
@@ -101,3 +104,24 @@ def test_delete_missing_profile_returns_not_found(client):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Profile not found"}
+
+
+def test_profile_connection_test_returns_provider_status(client, monkeypatch):
+    monkeypatch.setattr(
+        profile_service,
+        "test_profile_connection",
+        lambda payload: {"status": "ok", "message": "连接成功"},
+    )
+
+    response = client.post(
+        "/api/profiles/test-connection",
+        json={
+            "base_url": "https://example.com/v1",
+            "api_key": "sk-test",
+            "model": "demo-model",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] in {"ok", "error"}
+    assert response.json()["message"] == "连接成功"

@@ -28,3 +28,14 @@ class ProfileRead(BaseModel):
     model: str
     is_default: bool
     created_at: str
+
+
+class ProfileConnectionTestRequest(BaseModel):
+    base_url: str
+    api_key: str
+    model: str
+
+
+class ProfileConnectionTestResult(BaseModel):
+    status: str
+    message: str

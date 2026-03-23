@@ -2,8 +2,15 @@ import base64
 import sqlite3
 from typing import Optional
 
+import httpx
+
 from app.models.profile import Profile
-from app.schemas.profile import ProfileCreate, ProfileUpdate
+from app.schemas.profile import (
+    ProfileConnectionTestRequest,
+    ProfileConnectionTestResult,
+    ProfileCreate,
+    ProfileUpdate,
+)
 
 
 def _obscure_api_key(api_key: str) -> str:
@@ -92,3 +99,55 @@ def delete_profile(connection: sqlite3.Connection, profile_id: int) -> bool:
         (profile_id,),
     )
     return cursor.rowcount > 0
+
+
+def _build_models_url(base_url: str) -> str:
+    trimmed = base_url.rstrip("/")
+    if trimmed.endswith("/v1"):
+        return f"{trimmed}/models"
+    return f"{trimmed}/v1/models"
+
+
+def _normalize_connection_error(error: Exception) -> str:
+    if isinstance(error, httpx.TimeoutException):
+        return "连接超时"
+    if isinstance(error, httpx.InvalidURL):
+        return "地址无效"
+    if isinstance(error, httpx.HTTPStatusError):
+        status_code = error.response.status_code
+        if status_code in {401, 403}:
+            return "认证失败"
+        if status_code == 404:
+            return "模型不可用"
+        if 400 <= status_code < 500:
+            return "地址无效"
+    return "地址无效"
+
+
+def test_profile_connection(
+    payload: ProfileConnectionTestRequest,
+) -> ProfileConnectionTestResult:
+    url = _build_models_url(payload.base_url)
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(
+                url,
+                headers={"Authorization": f"Bearer {payload.api_key}"},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except Exception as error:
+        return ProfileConnectionTestResult(
+            status="error", message=_normalize_connection_error(error)
+        )
+
+    models = data.get("data", []) if isinstance(data, dict) else []
+    model_ids = {
+        item.get("id")
+        for item in models
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    if payload.model and payload.model not in model_ids:
+        return ProfileConnectionTestResult(status="error", message="模型不可用")
+
+    return ProfileConnectionTestResult(status="ok", message="连接成功")
