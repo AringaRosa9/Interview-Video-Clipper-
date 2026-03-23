@@ -21,3 +21,9 @@ rad.json
 #Test results file
 TestResults.xml
 .worktrees/
+.venv/
+node_modules/
+backend/.pytest_cache/
+backend/data/
+frontend/dist/
+.superpowers/
