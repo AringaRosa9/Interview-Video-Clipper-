@@ -35,6 +35,20 @@ def test_chunk_transcript_segments_preserves_order_and_timestamps():
     ]
 
 
+def test_chunk_transcript_segments_splits_single_oversize_segment():
+    segments = [
+        {"text": "abcdefghij", "start": 0.0, "end": 10.0, "speaker": "speaker_1"},
+    ]
+
+    chunks = chunk_transcript_segments(segments, max_chars=4)
+
+    assert chunks == [
+        [{"text": "abcd", "start": 0.0, "end": 4.0, "speaker": "speaker_1"}],
+        [{"text": "efgh", "start": 4.0, "end": 8.0, "speaker": "speaker_1"}],
+        [{"text": "ij", "start": 8.0, "end": 10.0, "speaker": "speaker_1"}],
+    ]
+
+
 def test_filter_prioritizes_longer_candidate_answers_first():
     segments = [
         {"text": "请介绍一个最有挑战的项目？", "start": 0, "end": 3, "speaker": "speaker_0"},
@@ -76,3 +90,19 @@ def test_filter_does_not_treat_candidate_answer_with_question_markers_as_intervi
 
     assert [segment["speaker"] for segment in filtered] == ["speaker_1", "speaker_1"]
     assert filtered[0]["text"].startswith("可以。我主导过支付链路改造")
+
+
+def test_filter_still_demotes_interviewer_prompt_with_leading_filler_words():
+    segments = [
+        {"text": "那请介绍一下你做过的高并发项目。", "start": 0, "end": 4, "speaker": "speaker_0"},
+        {
+            "text": "我主导过支付链路改造，把成功率提升到99.9%。",
+            "start": 4.5,
+            "end": 13.2,
+            "speaker": "speaker_1",
+        },
+    ]
+
+    filtered = filter_candidate_segments(segments)
+
+    assert [segment["speaker"] for segment in filtered] == ["speaker_1"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 
 
+LEADING_FILLERS = ("那", "那么", "然后", "接着", "再", "请问", "请问一下")
 QUESTION_PREFIXES = (
     "请",
     "能否",
@@ -15,13 +16,54 @@ QUESTION_PREFIXES = (
 )
 
 
+def _strip_leading_fillers(text: str) -> str:
+    normalized = text.lstrip("，,。.!！？?：:；;、 ")
+    changed = True
+    while normalized and changed:
+        changed = False
+        for filler in LEADING_FILLERS:
+            if normalized.startswith(filler):
+                normalized = normalized[len(filler) :].lstrip("，,。.!！？?：:；;、 ")
+                changed = True
+                break
+    return normalized
+
+
 def _is_obvious_question(segment: dict) -> bool:
     text = str(segment.get("text", "")).strip()
     if not text:
         return False
     if text.endswith(("?", "？")):
         return True
-    return any(text.startswith(prefix) for prefix in QUESTION_PREFIXES)
+    normalized = _strip_leading_fillers(text)
+    return any(normalized.startswith(prefix) for prefix in QUESTION_PREFIXES)
+
+
+def _split_segment(segment: dict, max_chars: int) -> list[dict]:
+    text = str(segment.get("text", ""))
+    if len(text) <= max_chars:
+        return [segment]
+
+    start = float(segment.get("start", 0))
+    end = float(segment.get("end", start))
+    total_chars = len(text)
+    duration = max(end - start, 0.0)
+    split_segments = []
+
+    for offset in range(0, total_chars, max_chars):
+        chunk_text = text[offset : offset + max_chars]
+        chunk_start = start + duration * (offset / total_chars)
+        chunk_end = start + duration * ((offset + len(chunk_text)) / total_chars)
+        split_segments.append(
+            {
+                **segment,
+                "text": chunk_text,
+                "start": chunk_start,
+                "end": chunk_end,
+            }
+        )
+
+    return split_segments
 
 
 def filter_candidate_segments(segments: list[dict]) -> list[dict]:
@@ -58,13 +100,14 @@ def chunk_transcript_segments(segments: list[dict], max_chars: int = 4000) -> li
     current_size = 0
 
     for segment in segments:
-        segment_size = len(str(segment.get("text", "")))
-        if current_chunk and current_size + segment_size > max_chars:
-            chunks.append(current_chunk)
-            current_chunk = []
-            current_size = 0
-        current_chunk.append(segment)
-        current_size += segment_size
+        for split_segment in _split_segment(segment, max_chars):
+            segment_size = len(str(split_segment.get("text", "")))
+            if current_chunk and current_size + segment_size > max_chars:
+                chunks.append(current_chunk)
+                current_chunk = []
+                current_size = 0
+            current_chunk.append(split_segment)
+            current_size += segment_size
 
     if current_chunk:
         chunks.append(current_chunk)
