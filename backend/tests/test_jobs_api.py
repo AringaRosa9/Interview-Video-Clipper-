@@ -201,3 +201,41 @@ def test_create_job_does_not_persist_when_workspace_allocation_fails(
         row = connection.execute("SELECT COUNT(*) AS count FROM jobs").fetchone()
 
     assert row["count"] == 0
+
+
+def test_create_job_cleans_workspace_when_pipeline_fails_after_allocation(
+    client, profile_id, monkeypatch, db_path
+):
+    from app.db import get_connection
+
+    monkeypatch.setattr(
+        "app.services.media_service.download_video",
+        lambda *args, **kwargs: "video.mp4",
+    )
+    monkeypatch.setattr(
+        "app.services.media_service.extract_audio",
+        lambda *args, **kwargs: "audio.wav",
+    )
+    monkeypatch.setattr(
+        "app.services.transcription_service.transcribe_audio",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("asr failed")),
+    )
+
+    workspace_path = db_path.parent / "data" / "jobs" / "1"
+
+    with pytest.raises(RuntimeError, match="asr failed"):
+        client.post(
+            "/api/jobs",
+            json={
+                "video_url": "https://cdn.example.com/interview.mp4",
+                "candidate_name": "候选人A",
+                "profile_id": profile_id,
+                "target_duration_seconds": 45,
+            },
+        )
+
+    with get_connection() as connection:
+        row = connection.execute("SELECT COUNT(*) AS count FROM jobs").fetchone()
+
+    assert row["count"] == 0
+    assert not workspace_path.exists()

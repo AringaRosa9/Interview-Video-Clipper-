@@ -1,4 +1,5 @@
 import sqlite3
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -50,6 +51,12 @@ def _persist_workspace_value(workspace_path: str, file_name: str, value: str) ->
     Path(workspace_path, file_name).write_text(value, encoding="utf-8")
 
 
+def _cleanup_workspace(workspace_path: Optional[str]) -> None:
+    if not workspace_path:
+        return
+    shutil.rmtree(workspace_path, ignore_errors=True)
+
+
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
 def create_job_endpoint(
     payload: JobCreate, connection: sqlite3.Connection = Depends(get_db)
@@ -62,6 +69,8 @@ def create_job_endpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
         )
+
+    workspace_path: Optional[str] = None
 
     try:
         cursor = connection.execute(
@@ -102,6 +111,7 @@ def create_job_endpoint(
         transcription_service.transcribe_audio(audio_path, workspace_path)
     except Exception:
         connection.rollback()
+        _cleanup_workspace(workspace_path)
         raise
     row = _get_job_row(connection, job_id)
     return JobRead.model_validate(_row_to_job(row))
