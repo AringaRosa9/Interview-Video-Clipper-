@@ -1,12 +1,12 @@
+import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-import sqlite3
 
 from app.core.config import get_settings
 
 
-def _database_path() -> Path:
+def database_path() -> Path:
     database_url = get_settings().database_url
     prefix = "sqlite:///"
     if not database_url.startswith(prefix):
@@ -15,10 +15,10 @@ def _database_path() -> Path:
 
 
 def init_db() -> None:
-    database_path = _database_path()
-    database_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path = database_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(database_path) as connection:
+    with sqlite3.connect(db_path) as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS profiles (
@@ -32,13 +32,29 @@ def init_db() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                video_url TEXT NOT NULL,
+                candidate_name TEXT NOT NULL,
+                profile_id INTEGER NOT NULL,
+                target_duration_seconds INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                failure_message TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(profile_id) REFERENCES profiles(id)
+            )
+            """
+        )
         connection.commit()
 
 
 @contextmanager
 def get_connection() -> Generator[sqlite3.Connection, None, None]:
     init_db()
-    connection = sqlite3.connect(_database_path())
+    connection = sqlite3.connect(database_path())
     connection.row_factory = sqlite3.Row
     try:
         yield connection

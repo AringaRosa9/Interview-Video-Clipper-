@@ -13,6 +13,10 @@ from app.schemas.profile import (
 )
 
 
+class ProfileInUseError(Exception):
+    pass
+
+
 def _obscure_api_key(api_key: str) -> str:
     return base64.urlsafe_b64encode(api_key.encode("utf-8")).decode("ascii")
 
@@ -94,6 +98,13 @@ def update_profile(
 
 
 def delete_profile(connection: sqlite3.Connection, profile_id: int) -> bool:
+    job_exists = connection.execute(
+        "SELECT 1 FROM jobs WHERE profile_id = ? LIMIT 1",
+        (profile_id,),
+    ).fetchone()
+    if job_exists is not None:
+        raise ProfileInUseError("Profile is in use by jobs")
+
     cursor = connection.execute(
         "DELETE FROM profiles WHERE id = ?",
         (profile_id,),

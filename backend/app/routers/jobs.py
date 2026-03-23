@@ -60,7 +60,7 @@ def create_job_endpoint(
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            payload.video_url,
+            str(payload.video_url),
             payload.candidate_name,
             payload.profile_id,
             payload.target_duration_seconds,

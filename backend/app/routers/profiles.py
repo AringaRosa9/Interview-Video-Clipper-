@@ -56,7 +56,13 @@ def update_profile_endpoint(
 def delete_profile_endpoint(
     profile_id: int, connection: sqlite3.Connection = Depends(get_db)
 ) -> Response:
-    deleted = profile_service.delete_profile(connection, profile_id)
+    try:
+        deleted = profile_service.delete_profile(connection, profile_id)
+    except profile_service.ProfileInUseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,13 +1,13 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class JobCreate(BaseModel):
-    video_url: str
+    video_url: HttpUrl
     candidate_name: str
     profile_id: int
-    target_duration_seconds: int
+    target_duration_seconds: int = Field(gt=0)
 
 
 class JobRead(BaseModel):

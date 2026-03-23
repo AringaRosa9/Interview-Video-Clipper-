@@ -95,6 +95,34 @@ def test_delete_profile(client):
     assert list_response.json() == []
 
 
+def test_delete_profile_with_jobs_returns_conflict(client):
+    create_response = client.post(
+        "/api/profiles",
+        json={
+            "name": "有关联任务",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "sk-locked",
+            "model": "gpt-4.1-mini",
+        },
+    )
+    profile_id = create_response.json()["id"]
+    job_response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "https://cdn.example.com/interview.mp4",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 45,
+        },
+    )
+    assert job_response.status_code == 201
+
+    delete_response = client.delete(f"/api/profiles/{profile_id}")
+
+    assert delete_response.status_code == 409
+    assert delete_response.json() == {"detail": "Profile is in use by jobs"}
+
+
 def test_update_missing_profile_returns_not_found(client):
     response = client.patch("/api/profiles/9999", json={"name": "missing"})
 

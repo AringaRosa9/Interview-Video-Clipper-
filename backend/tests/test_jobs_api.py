@@ -76,3 +76,31 @@ def test_get_missing_job_returns_not_found(client):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Job not found"}
+
+
+def test_create_job_rejects_invalid_video_url(client, profile_id):
+    response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "not-a-url",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 45,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_job_rejects_non_positive_target_duration(client, profile_id):
+    response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "https://cdn.example.com/interview.mp4",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 0,
+        },
+    )
+
+    assert response.status_code == 422
