@@ -182,6 +182,96 @@ def test_get_job_highlights_returns_empty_list_for_malformed_payload(client, pro
     }
 
 
+def test_review_persists_approved_highlight_ids_and_export_uses_them(
+    client, profile_id, monkeypatch
+):
+    create_response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "https://cdn.example.com/interview.mp4",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 45,
+        },
+    )
+    job = create_response.json()
+    workspace_path = Path(job["workspace_path"])
+    workspace_path.joinpath("highlights.json").write_text(
+        """
+        {
+          "highlights": [
+            {
+              "start": 5.25,
+              "end": 18.75,
+              "star_label": "Action+Result",
+              "summary": "优化支付系统并提升成功率",
+              "reason": "体现明确动作和量化结果",
+              "score": 0.92
+            },
+            {
+              "start": 20.0,
+              "end": 28.0,
+              "star_label": "Situation+Task",
+              "summary": "补充项目背景和职责",
+              "reason": "覆盖情境和任务描述",
+              "score": 0.81
+            }
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        f"/api/jobs/{job['id']}/review",
+        json={"approved_highlight_ids": [0]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "job_id": job["id"],
+        "status": "reviewed",
+        "approved_highlight_ids": [0],
+    }
+    assert workspace_path.joinpath("approved_highlight_ids.json").read_text(
+        encoding="utf-8"
+    ) == "[0]"
+
+    export_calls: list[dict] = []
+
+    def fake_export_clips(*, workspace_path: str, clips: list[dict]) -> list[str]:
+        export_calls.append({"workspace_path": workspace_path, "clips": clips})
+        output_path = Path(workspace_path) / "final.mp4"
+        output_path.write_text("final video", encoding="utf-8")
+        return [str(output_path)]
+
+    monkeypatch.setattr("app.services.export_service.export_job_workspace", fake_export_clips)
+
+    export_response = client.post(f"/api/jobs/{job['id']}/export")
+
+    assert export_response.status_code == 200
+    assert export_response.json() == {
+        "job_id": job["id"],
+        "status": "exported",
+        "output_file": str(workspace_path / "final.mp4"),
+    }
+    assert export_calls == [
+        {
+            "workspace_path": str(workspace_path),
+            "clips": [
+                {
+                    "start": 5.25,
+                    "end": 18.75,
+                    "star_label": "Action+Result",
+                    "summary": "优化支付系统并提升成功率",
+                    "reason": "体现明确动作和量化结果",
+                    "score": 0.92,
+                }
+            ],
+        }
+    ]
+
+
 def test_get_missing_job_returns_not_found(client):
     response = client.get("/api/jobs/9999")
 

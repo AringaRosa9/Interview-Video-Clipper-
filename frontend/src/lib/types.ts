@@ -46,3 +46,34 @@ export type JobInput = {
   profile_id: number;
   target_duration_seconds: number;
 };
+
+export type HighlightItem = {
+  start: number;
+  end: number;
+  star_label: string;
+  summary: string;
+  reason: string;
+  score: number;
+};
+
+export type JobHighlights = {
+  job_id: number;
+  status: string;
+  items: HighlightItem[];
+};
+
+export type JobReviewInput = {
+  approved_highlight_ids: number[];
+};
+
+export type JobReviewResult = {
+  job_id: number;
+  status: string;
+  approved_highlight_ids: number[];
+};
+
+export type JobExportResult = {
+  job_id: number;
+  status: string;
+  output_file: string;
+};

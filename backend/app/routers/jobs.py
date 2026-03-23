@@ -9,8 +9,16 @@ from pydantic import ValidationError
 
 from app.db import get_db
 from app.models.job import Job
-from app.schemas.job import HighlightItemRead, JobCreate, JobHighlightsRead, JobRead
-from app.services import media_service, transcription_service
+from app.schemas.job import (
+    HighlightItemRead,
+    JobCreate,
+    JobExportRead,
+    JobHighlightsRead,
+    JobRead,
+    JobReviewRead,
+    JobReviewRequest,
+)
+from app.services import export_service, media_service, transcription_service
 from app.services.highlight_selector import parse_highlight_response
 from app.services.workspace_service import allocate_job_workspace
 
@@ -73,6 +81,34 @@ def _read_workspace_highlights(workspace_path: Optional[str]) -> list[HighlightI
         return [HighlightItemRead.model_validate(item) for item in payload]
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, ValidationError):
         return []
+
+
+def _approved_highlight_ids_path(workspace_path: str) -> Path:
+    return Path(workspace_path) / "approved_highlight_ids.json"
+
+
+def _read_workspace_approved_highlight_ids(workspace_path: Optional[str]) -> list[int]:
+    if not workspace_path:
+        return []
+    approved_path = _approved_highlight_ids_path(workspace_path)
+    if not approved_path.exists():
+        return []
+    try:
+        payload = json.loads(approved_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            return []
+        return [int(item) for item in payload]
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return []
+
+
+def _write_workspace_approved_highlight_ids(
+    workspace_path: str, approved_highlight_ids: list[int]
+) -> None:
+    _approved_highlight_ids_path(workspace_path).write_text(
+        json.dumps(approved_highlight_ids, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
@@ -157,3 +193,59 @@ def get_job_highlights_endpoint(
         status=row["status"],
         items=_read_workspace_highlights(row["workspace_path"]),
     )
+
+
+@router.post("/{job_id}/review", response_model=JobReviewRead)
+def review_job_endpoint(
+    job_id: int,
+    payload: JobReviewRequest,
+    connection: sqlite3.Connection = Depends(get_db),
+) -> JobReviewRead:
+    row = _get_job_row(connection, job_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    workspace_path = row["workspace_path"]
+    approved_highlight_ids = [int(item) for item in payload.approved_highlight_ids]
+    _write_workspace_approved_highlight_ids(workspace_path, approved_highlight_ids)
+
+    connection.execute(
+        "UPDATE jobs SET status = ?, failure_message = NULL WHERE id = ?",
+        ("reviewed", job_id),
+    )
+
+    return JobReviewRead(
+        job_id=job_id,
+        status="reviewed",
+        approved_highlight_ids=approved_highlight_ids,
+    )
+
+
+@router.post("/{job_id}/export", response_model=JobExportRead)
+def export_job_endpoint(
+    job_id: int, connection: sqlite3.Connection = Depends(get_db)
+) -> JobExportRead:
+    row = _get_job_row(connection, job_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    workspace_path = row["workspace_path"]
+    approved_highlight_ids = _read_workspace_approved_highlight_ids(workspace_path)
+    highlights = _read_workspace_highlights(workspace_path)
+    approved_clips = [
+        highlight.model_dump()
+        for index, highlight in enumerate(highlights)
+        if index in approved_highlight_ids
+    ]
+    exported_files = export_service.export_job_workspace(
+        workspace_path=workspace_path,
+        clips=approved_clips,
+    )
+    output_file = exported_files[-1] if exported_files else str(Path(workspace_path) / "final.mp4")
+
+    connection.execute(
+        "UPDATE jobs SET status = ?, failure_message = NULL WHERE id = ?",
+        ("exported", job_id),
+    )
+
+    return JobExportRead(job_id=job_id, status="exported", output_file=output_file)

@@ -37,3 +37,19 @@ class JobHighlightsRead(BaseModel):
     job_id: int
     status: str
     items: list[HighlightItemRead]
+
+
+class JobReviewRequest(BaseModel):
+    approved_highlight_ids: list[int] = Field(default_factory=list)
+
+
+class JobReviewRead(BaseModel):
+    job_id: int
+    status: str
+    approved_highlight_ids: list[int]
+
+
+class JobExportRead(BaseModel):
+    job_id: int
+    status: str
+    output_file: str

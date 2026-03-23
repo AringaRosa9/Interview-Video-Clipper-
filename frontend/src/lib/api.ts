@@ -1,6 +1,10 @@
 import type {
   Job,
+  JobExportResult,
+  JobHighlights,
   JobInput,
+  JobReviewInput,
+  JobReviewResult,
   Profile,
   ProfileConnectionTestPayload,
   ProfileConnectionTestResult,
@@ -66,4 +70,21 @@ export function createJob(payload: JobInput): Promise<Job> {
 
 export function getJob(jobId: number): Promise<Job> {
   return request<Job>(`/jobs/${jobId}`);
+}
+
+export function getJobHighlights(jobId: number): Promise<JobHighlights> {
+  return request<JobHighlights>(`/jobs/${jobId}/highlights`);
+}
+
+export function reviewJob(jobId: number, payload: JobReviewInput): Promise<JobReviewResult> {
+  return request<JobReviewResult>(`/jobs/${jobId}/review`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function exportJob(jobId: number): Promise<JobExportResult> {
+  return request<JobExportResult>(`/jobs/${jobId}/export`, {
+    method: "POST",
+  });
 }

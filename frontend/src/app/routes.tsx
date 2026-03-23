@@ -1,18 +1,25 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { AIReviewStep } from "../features/clipping/AIReviewStep";
 import { AnalysisSetupStep } from "../features/clipping/AnalysisSetupStep";
+import { ExportStep } from "../features/clipping/ExportStep";
 import { VideoLinkStep } from "../features/clipping/VideoLinkStep";
 import { useClippingWizard } from "../features/clipping/useClippingWizard";
 import { ProfileForm } from "../features/profiles/ProfileForm";
 import { ProfileList } from "../features/profiles/ProfileList";
-import { createJob, getJob, listProfiles } from "../lib/api";
-import type { Job, Profile } from "../lib/types";
+import { createJob, exportJob, getJob, getJobHighlights, listProfiles, reviewJob } from "../lib/api";
+import type { HighlightItem, Job, JobExportResult, Profile } from "../lib/types";
 import { AppShell } from "./AppShell";
 
 function ClippingPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profilesError, setProfilesError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [highlights, setHighlights] = useState<HighlightItem[]>([]);
+  const [selectedHighlightIds, setSelectedHighlightIds] = useState<number[]>([]);
+  const [exportResult, setExportResult] = useState<JobExportResult | null>(null);
   const [wizardState, dispatch] = useClippingWizard();
 
   async function loadProfiles() {
@@ -73,12 +80,35 @@ function ClippingPage() {
     };
   }, [dispatch, wizardState.jobId, wizardState.step]);
 
+  useEffect(() => {
+    if (wizardState.step !== "review" || wizardState.jobId === null) {
+      return;
+    }
+
+    async function loadHighlights() {
+      try {
+        const response = await getJobHighlights(wizardState.jobId as number);
+        setHighlights(response.items);
+        setSelectedHighlightIds([]);
+        setReviewError("");
+      } catch {
+        setReviewError("加载推荐片段失败，请稍后重试。");
+      }
+    }
+
+    void loadHighlights();
+  }, [wizardState.jobId, wizardState.step]);
+
   async function handleCreateJob(payload: {
     profileId: number;
     targetDurationSeconds: number;
     candidateSpeakerPriority: boolean;
     tokenSavingMode: boolean;
   }) {
+    setHighlights([]);
+    setSelectedHighlightIds([]);
+    setExportResult(null);
+    setReviewError("");
     dispatch({
       type: "setupSaved",
       payload: {
@@ -116,6 +146,36 @@ function ClippingPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleReviewSubmit() {
+    if (wizardState.jobId === null) {
+      return;
+    }
+
+    setReviewSubmitting(true);
+    try {
+      await reviewJob(wizardState.jobId, {
+        approved_highlight_ids: selectedHighlightIds,
+      });
+      const exported = await exportJob(wizardState.jobId);
+      setExportResult(exported);
+      setReviewError("");
+    } catch {
+      setReviewError("提交审核或导出失败，请稍后重试。");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+
+  function handleKeep(highlightId: number) {
+    setSelectedHighlightIds((current) =>
+      current.includes(highlightId) ? current : [...current, highlightId].sort((left, right) => left - right),
+    );
+  }
+
+  function handleRemove(highlightId: number) {
+    setSelectedHighlightIds((current) => current.filter((item) => item !== highlightId));
   }
 
   return (
@@ -160,11 +220,22 @@ function ClippingPage() {
       ) : null}
       {wizardState.step === "review" ? (
         <section>
-          <h2>AI 推荐片段</h2>
           <p>候选人发言优先：{wizardState.candidateSpeakerPriority ? "已开启" : "未开启"}</p>
           <p>节省 Token 模式：{wizardState.tokenSavingMode ? "已开启" : "未开启"}</p>
           {wizardState.notes ? <p>岗位/备注：{wizardState.notes}</p> : null}
-          <p>推荐片段已准备完成。下一步将接入人工确认和导出功能。</p>
+          {exportResult ? (
+            <ExportStep outputFile={exportResult.output_file} />
+          ) : (
+            <AIReviewStep
+              items={highlights}
+              selectedHighlightIds={selectedHighlightIds}
+              submitting={reviewSubmitting}
+              submitError={reviewError}
+              onKeep={handleKeep}
+              onRemove={handleRemove}
+              onSubmit={handleReviewSubmit}
+            />
+          )}
         </section>
       ) : null}
     </div>
