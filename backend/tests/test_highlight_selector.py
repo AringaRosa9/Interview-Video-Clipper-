@@ -24,6 +24,26 @@ def test_selector_returns_star_tagged_highlights():
     assert result[0].star_label == "Action+Result"
 
 
+def test_selector_preserves_fractional_timestamps():
+    llm_output = {
+        "highlights": [
+            {
+                "start": 5.25,
+                "end": 18.75,
+                "star_label": "Action+Result",
+                "summary": "优化支付系统并提升成功率",
+                "reason": "体现明确动作和量化结果",
+                "score": 0.92,
+            }
+        ]
+    }
+
+    result = parse_highlight_response(llm_output)
+
+    assert result[0].start == 5.25
+    assert result[0].end == 18.75
+
+
 def test_select_highlights_calls_configured_endpoint_with_transcript_chunks():
     class FakeOpenAIClient:
         def __init__(self):

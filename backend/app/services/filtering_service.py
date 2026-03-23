@@ -35,8 +35,9 @@ def filter_candidate_segments(segments: list[dict]) -> list[dict]:
             score -= 50
         ranked_segments.append((score, segment))
 
-    kept = [segment for score, segment in ranked_segments if score > 0]
-    return kept if kept else [segment for _, segment in ranked_segments]
+    prioritized_segments = sorted(ranked_segments, key=lambda item: item[0], reverse=True)
+    kept = [segment for score, segment in prioritized_segments if score > 0]
+    return kept if kept else [segment for _, segment in prioritized_segments]
 
 
 def chunk_transcript_segments(segments: list[dict], max_chars: int = 4000) -> list[list[dict]]:

@@ -82,8 +82,8 @@ def _format_chunk(index: int, chunk: list[dict]) -> str:
 def parse_highlight_response(payload: dict[str, Any]) -> list[HighlightItemRead]:
     return [
         HighlightItemRead(
-            start=int(item["start"]),
-            end=int(item["end"]),
+            start=float(item["start"]),
+            end=float(item["end"]),
             star_label=str(item["star_label"]),
             summary=str(item["summary"]),
             reason=str(item["reason"]),

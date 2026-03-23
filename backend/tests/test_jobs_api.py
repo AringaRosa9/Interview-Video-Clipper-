@@ -109,6 +109,55 @@ def test_get_job_highlights_returns_empty_list(client, profile_id):
     }
 
 
+def test_get_job_highlights_reads_structured_selector_payload(client, profile_id):
+    create_response = client.post(
+        "/api/jobs",
+        json={
+            "video_url": "https://cdn.example.com/interview.mp4",
+            "candidate_name": "候选人A",
+            "profile_id": profile_id,
+            "target_duration_seconds": 45,
+        },
+    )
+    job = create_response.json()
+    workspace_path = Path(job["workspace_path"])
+    workspace_path.joinpath("highlights.json").write_text(
+        """
+        {
+          "highlights": [
+            {
+              "start": 5.25,
+              "end": 18.75,
+              "star_label": "Action+Result",
+              "summary": "优化支付系统并提升成功率",
+              "reason": "体现明确动作和量化结果",
+              "score": 0.92
+            }
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/jobs/{job['id']}/highlights")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "job_id": job["id"],
+        "status": "transcribing",
+        "items": [
+            {
+                "start": 5.25,
+                "end": 18.75,
+                "star_label": "Action+Result",
+                "summary": "优化支付系统并提升成功率",
+                "reason": "体现明确动作和量化结果",
+                "score": 0.92,
+            }
+        ],
+    }
+
+
 def test_get_missing_job_returns_not_found(client):
     response = client.get("/api/jobs/9999")
 

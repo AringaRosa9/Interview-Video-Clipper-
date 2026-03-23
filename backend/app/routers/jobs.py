@@ -10,6 +10,7 @@ from app.db import get_db
 from app.models.job import Job
 from app.schemas.job import HighlightItemRead, JobCreate, JobHighlightsRead, JobRead
 from app.services import media_service, transcription_service
+from app.services.highlight_selector import parse_highlight_response
 from app.services.workspace_service import allocate_job_workspace
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -65,6 +66,8 @@ def _read_workspace_highlights(workspace_path: Optional[str]) -> list[HighlightI
     if not highlight_path.exists():
         return []
     payload = json.loads(highlight_path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        return parse_highlight_response(payload)
     return [HighlightItemRead.model_validate(item) for item in payload]
 
 

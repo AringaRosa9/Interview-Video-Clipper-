@@ -33,3 +33,23 @@ def test_chunk_transcript_segments_preserves_order_and_timestamps():
         [segments[0], segments[1]],
         [segments[2]],
     ]
+
+
+def test_filter_prioritizes_longer_candidate_answers_first():
+    segments = [
+        {"text": "请介绍一个最有挑战的项目？", "start": 0, "end": 3, "speaker": "speaker_0"},
+        {"text": "我负责重构支付链路。", "start": 3.2, "end": 7.1, "speaker": "speaker_1"},
+        {
+            "text": "我主导了支付系统重构，拆分核心链路并建立监控告警，最终把成功率提升到99.9%，同时把故障恢复时间缩短到5分钟内。",
+            "start": 7.3,
+            "end": 22.8,
+            "speaker": "speaker_1",
+        },
+    ]
+
+    filtered = filter_candidate_segments(segments)
+
+    assert [segment["text"] for segment in filtered] == [
+        "我主导了支付系统重构，拆分核心链路并建立监控告警，最终把成功率提升到99.9%，同时把故障恢复时间缩短到5分钟内。",
+        "我负责重构支付链路。",
+    ]
